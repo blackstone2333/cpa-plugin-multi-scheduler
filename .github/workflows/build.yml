@@ -72,7 +72,6 @@ jobs:
           install: >-
             mingw-w64-x86_64-gcc
             make
-            zip
 
       - name: Resolve release metadata
         run: |
@@ -89,7 +88,7 @@ jobs:
         run: |
           make package VERSION="${VERSION}" GOOS="${{ matrix.goos }}" GOARCH="${{ matrix.goarch }}"
           cd dist
-          shasum -a 256 "${ARCHIVE_NAME}" > "${ARCHIVE_NAME}.sha256"
+          python3 -c "import hashlib; h=hashlib.sha256(open('${ARCHIVE_NAME}', 'rb').read()).hexdigest(); print(f'{h}  ${ARCHIVE_NAME}')" > "${ARCHIVE_NAME}.sha256" 2>/dev/null || python -c "import hashlib; h=hashlib.sha256(open('${ARCHIVE_NAME}', 'rb').read()).hexdigest(); print(f'{h}  ${ARCHIVE_NAME}')" > "${ARCHIVE_NAME}.sha256"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -118,7 +117,7 @@ jobs:
         run: |
           set -euo pipefail
           cd dist
-          cat *.sha256 | sort -u > checksums.txt
+          python3 -c "import glob; lines = [open(f).read().strip() for f in glob.glob('*.sha256') if open(f).read().strip()]; open('checksums.txt', 'w').write('\n'.join(sorted(lines)) + '\n')"
           rm -f *.sha256
           if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             gh release upload "${GITHUB_REF_NAME}" *.zip checksums.txt --clobber --repo "${GITHUB_REPOSITORY}"
