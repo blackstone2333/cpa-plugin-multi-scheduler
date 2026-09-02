@@ -30,7 +30,7 @@ build:
 
 package: build
 	mkdir -p $(BUILD_DIR)
-	cd $(BUILD_DIR) && zip -9 $(PLUGIN_ID)_$(VERSION)_$(GOOS)_$(GOARCH).zip $(PLUGIN_ID).$(EXT)
+	cd $(BUILD_DIR) && (python3 -c "import zipfile; z=zipfile.ZipFile('$(PLUGIN_ID)_$(VERSION)_$(GOOS)_$(GOARCH).zip', 'w', zipfile.ZIP_DEFLATED); z.write('$(PLUGIN_ID).$(EXT)'); z.close()" 2>/dev/null || python -c "import zipfile; z=zipfile.ZipFile('$(PLUGIN_ID)_$(VERSION)_$(GOOS)_$(GOARCH).zip', 'w', zipfile.ZIP_DEFLATED); z.write('$(PLUGIN_ID).$(EXT)'); z.close()")
 
 checksums:
 	cd $(BUILD_DIR) && shasum -a 256 *.zip > checksums.txt
