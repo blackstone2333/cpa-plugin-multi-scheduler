@@ -30,9 +30,9 @@ func DefaultConfig() Config {
 		PriorityStep:          100,
 		MinimumPriority:       100,
 		ExhaustedPriority:     -1000,
-		PollIntervalHighMin:   20,
-		PollIntervalMediumMin: 5,
-		PollIntervalLowMin:    3,
+		PollIntervalHighMin:   30,
+		PollIntervalMediumMin: 15,
+		PollIntervalLowMin:    10,
 		StaggerIntervalSec:    2,
 		SyncToHostPriority:    true,
 	}

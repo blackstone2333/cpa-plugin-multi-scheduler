@@ -50,9 +50,9 @@ plugins:
       priority_step: 100            # 梯队降级步长
       minimum_priority: 100         # 最低可用优先级
       exhausted_priority: -1000     # 耗尽下沉优先级
-      poll_interval_high_min: 20    # 充裕额度巡检间隔（分钟）
-      poll_interval_medium_min: 5   # 中等额度巡检间隔（分钟）
-      poll_interval_low_min: 3      # 临界额度巡检间隔（分钟）
+      poll_interval_high_min: 30    # 充裕额度巡检间隔（分钟）
+      poll_interval_medium_min: 15   # 中等额度巡检间隔（分钟）
+      poll_interval_low_min: 10      # 临界额度巡检间隔（分钟）
 ```
 
 ---

@@ -50,9 +50,9 @@ plugins:
       priority_step: 100            # Step size per tier
       minimum_priority: 100         # Floor priority for active tiers
       exhausted_priority: -1000     # Negative sink priority for exhausted accounts
-      poll_interval_high_min: 20    # Healthy quota check interval (minutes)
-      poll_interval_medium_min: 5   # Medium quota check interval (minutes)
-      poll_interval_low_min: 3      # Low quota check interval (minutes)
+      poll_interval_high_min: 30    # Healthy quota check interval (minutes)
+      poll_interval_medium_min: 15   # Medium quota check interval (minutes)
+      poll_interval_low_min: 10      # Low quota check interval (minutes)
 ```
 
 ---
