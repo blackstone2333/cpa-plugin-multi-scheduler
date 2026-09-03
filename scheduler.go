@@ -85,6 +85,38 @@ func MakeDecisions(accounts []*AccountState, cfg Config) []Decision {
 		scores[i] = score
 	}
 
+	// CPA only selects the highest ready priority bucket.  If an entire earlier
+	// reset tier is low on long-period quota, merge it into the next healthy tier
+	// so the low account keeps receiving traffic and can drain to zero.  Accounts
+	// already sharing a reset tier are never split apart.  A 5-hour-only dip does
+	// not trigger a merge; CPA's own availability/cooldown handling covers that
+	// temporary window.
+	tierPriorities := append([]int(nil), scores...)
+	tierLowOnly := make([]bool, len(tiers))
+	for tierIdx, tier := range tiers {
+		if len(tier) == 0 {
+			continue
+		}
+		tierLowOnly[tierIdx] = true
+		for _, acc := range tier {
+			if !lowLongQuota(acc, cfg) {
+				tierLowOnly[tierIdx] = false
+				break
+			}
+		}
+	}
+	for tierIdx, lowOnly := range tierLowOnly {
+		if !lowOnly {
+			continue
+		}
+		for healthyIdx := tierIdx + 1; healthyIdx < len(tiers); healthyIdx++ {
+			if !tierLowOnly[healthyIdx] {
+				tierPriorities[tierIdx] = scores[healthyIdx]
+				break
+			}
+		}
+	}
+
 	decisions := make([]Decision, 0, len(accounts))
 
 	// Exhausted accounts assigned negative priority (-1000)
@@ -101,19 +133,10 @@ func MakeDecisions(accounts []*AccountState, cfg Config) []Decision {
 	for tierIdx, tier := range tiers {
 		tierScore := scores[tierIdx]
 		for _, acc := range tier {
-			priority := tierScore
+			priority := tierPriorities[tierIdx]
 			reason := "long-window reset order"
-
-			// Check 5-hour quota demotion threshold
-			if acc.Quota != nil && acc.Quota.FiveHourFraction != nil {
-				if *acc.Quota.FiveHourFraction <= cfg.LowFiveHourThreshold {
-					demoted := priority - cfg.PriorityStep
-					if demoted < cfg.MinimumPriority {
-						demoted = cfg.MinimumPriority
-					}
-					priority = demoted
-					reason = "5h quota at or below threshold; demoted one tier"
-				}
+			if priority != tierScore {
+				reason = "low-only tier merged with next healthy tier"
 			}
 
 			decisions = append(decisions, Decision{
@@ -130,6 +153,26 @@ func MakeDecisions(accounts []*AccountState, cfg Config) []Decision {
 	})
 
 	return decisions
+}
+
+// lowLongQuota reports whether the account's smallest observed long-period
+// remainder is at or below the configured threshold.  Missing quota is not low:
+// an account must be successfully observed before it can be merged.
+func lowLongQuota(acc *AccountState, cfg Config) bool {
+	if acc == nil || acc.Quota == nil {
+		return false
+	}
+	longs := acc.Quota.LongFractions()
+	if len(longs) == 0 {
+		return false
+	}
+	minimum := longs[0]
+	for _, value := range longs[1:] {
+		if value < minimum {
+			minimum = value
+		}
+	}
+	return minimum <= cfg.LowFiveHourThreshold
 }
 
 // NextPollInterval calculates when to check quota next based on remaining percentage.

@@ -44,7 +44,6 @@ func TestGroupTiers(t *testing.T) {
 
 func TestMakeDecisions(t *testing.T) {
 	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
-	fiveLow := 0.03
 	fiveNormal := 0.50
 
 	accounts := []*AccountState{
@@ -57,11 +56,19 @@ func TestMakeDecisions(t *testing.T) {
 			},
 		},
 		{
-			Key: "acc-demoted",
+			Key: "acc-low-long",
 			Quota: &Quota{
-				FiveHourFraction: &fiveLow, // <= 5% -> demote 1 tier
+				FiveHourFraction: &fiveNormal,
+				WeeklyFraction:   0.03, // low long-period remainder
+				WeeklyReset:      now.Add(24 * time.Hour),
+			},
+		},
+		{
+			Key: "acc-healthy-later",
+			Quota: &Quota{
+				FiveHourFraction: &fiveNormal,
 				WeeklyFraction:   0.8,
-				WeeklyReset:      now,
+				WeeklyReset:      now.Add(48 * time.Hour),
 			},
 		},
 		{
@@ -86,11 +93,87 @@ func TestMakeDecisions(t *testing.T) {
 	if d, ok := decMap["acc-healthy"]; !ok || d.Priority != 400 {
 		t.Errorf("acc-healthy priority = %d, want 400", d.Priority)
 	}
-	if d, ok := decMap["acc-demoted"]; !ok || d.Priority != 300 {
-		t.Errorf("acc-demoted priority = %d, want 300", d.Priority)
+	if d, ok := decMap["acc-low-long"]; !ok || d.Priority != 200 {
+		t.Errorf("acc-low-long priority = %d, want 200 (merged with next healthy tier)", d.Priority)
+	}
+	if d, ok := decMap["acc-healthy-later"]; !ok || d.Priority != 200 {
+		t.Errorf("acc-healthy-later priority = %d, want 200", d.Priority)
 	}
 	if d, ok := decMap["acc-exhausted"]; !ok || d.Priority != -1000 {
 		t.Errorf("acc-exhausted priority = %d, want -1000", d.Priority)
+	}
+}
+
+func TestMakeDecisionsKeepsLowAccountWithHealthyPeerInSameTier(t *testing.T) {
+	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
+	five := 0.8
+	accounts := []*AccountState{
+		{Key: "low", Quota: &Quota{FiveHourFraction: &five, WeeklyFraction: 0.04, WeeklyReset: now}},
+		{Key: "healthy", Quota: &Quota{FiveHourFraction: &five, WeeklyFraction: 0.90, WeeklyReset: now.Add(2 * time.Hour)}},
+		{Key: "later", Quota: &Quota{FiveHourFraction: &five, WeeklyFraction: 0.90, WeeklyReset: now.Add(48 * time.Hour)}},
+	}
+	decisions := MakeDecisions(accounts, DefaultConfig())
+	got := make(map[string]int)
+	for _, decision := range decisions {
+		got[decision.Account.Key] = decision.Priority
+	}
+	if got["low"] != 400 || got["healthy"] != 400 || got["later"] != 300 {
+		t.Fatalf("priorities = %#v, want low/healthy=400 and later=300", got)
+	}
+}
+
+func TestMakeDecisionsDoesNotMergeFiveHourOnlyDip(t *testing.T) {
+	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
+	fiveLow := 0.03
+	fiveHealthy := 0.8
+	accounts := []*AccountState{
+		{Key: "short-low", Quota: &Quota{FiveHourFraction: &fiveLow, WeeklyFraction: 0.8, WeeklyReset: now}},
+		{Key: "healthy-later", Quota: &Quota{FiveHourFraction: &fiveHealthy, WeeklyFraction: 0.8, WeeklyReset: now.Add(48 * time.Hour)}},
+	}
+	decisions := MakeDecisions(accounts, DefaultConfig())
+	got := make(map[string]int)
+	for _, decision := range decisions {
+		got[decision.Account.Key] = decision.Priority
+	}
+	if got["short-low"] != 400 || got["healthy-later"] != 300 {
+		t.Fatalf("priorities = %#v, want short-low=400 and healthy-later=300", got)
+	}
+}
+
+func TestMakeDecisionsOnlySinksWhenEveryLongWindowIsExhausted(t *testing.T) {
+	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
+	five := 0.8
+	accounts := []*AccountState{
+		{
+			Key: "partially-exhausted",
+			Quota: &Quota{
+				FiveHourFraction: &five,
+				WeeklyFraction:   0,
+				WeeklyFractions:  []float64{0, 0.04},
+				WeeklyReset:      now,
+			},
+		},
+		{
+			Key: "fully-exhausted",
+			Quota: &Quota{
+				FiveHourFraction: &five,
+				WeeklyFraction:   0,
+				WeeklyFractions:  []float64{0, 0},
+				WeeklyReset:      now,
+			},
+		},
+	}
+
+	decisions := MakeDecisions(accounts, DefaultConfig())
+	got := make(map[string]int)
+	for _, decision := range decisions {
+		got[decision.Account.Key] = decision.Priority
+	}
+	if got["partially-exhausted"] != 400 {
+		t.Fatalf("partially-exhausted priority = %d, want 400 while one long window remains", got["partially-exhausted"])
+	}
+	if got["fully-exhausted"] != -1000 {
+		t.Fatalf("fully-exhausted priority = %d, want -1000", got["fully-exhausted"])
 	}
 }
 

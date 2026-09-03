@@ -12,9 +12,10 @@ It provides real-time quota awareness, reset-window tier clustering, adaptive ra
 
 - **Multi-Provider Unified**: Native support for AntiGravity (Gemini), Codex (ChatGPT), Claude (Anthropic), Kimi (Moonshot), and xAI (Grok).
 - **Reset-Window Tier Clustering**: Automatically clusters accounts with reset times within 16 hours into prioritized tiers (`400 / 300 / 200 / 100`) and round-robins requests within the top active tier.
-- **Dynamic Quota Demotion**: Automatically demotes an account by one tier when its short-term (e.g. 5-hour) quota falls below 5%, shielding it from exhaustion.
+- **Low-Quota Drain**: When every account in an earlier reset tier is at or below 5% on its long-period quota, that tier merges with the next healthy tier. Positive-quota accounts remain equally routable until all long windows are exhausted.
+- **Short-Window Tolerance**: A temporary 5-hour dip does not change priority; CPA's own availability and cooldown handling cover that window.
 - **Exhaustion Soft Sink**: When all long-period quota windows are exhausted, assigns priority `-1000` to prevent traffic routing without hard-disabling the account.
-- **Adaptive Polling & Backoff**: Polls healthy accounts every 20 minutes; dynamically ramps up to 5m/3m when quotas run low; handles HTTP 429 with exponential backoff.
+- **Adaptive Polling & Backoff**: Polls accounts above 15% every 30 minutes, 5%–15% every 15 minutes, and below 5% every 10 minutes; handles HTTP 429 with exponential backoff.
 - **Built-in Visual Dashboard**: Dedicated Management UI and JSON status endpoint to monitor all credentials, tiers, remaining percentages, and reset countdowns in real time.
 
 ---
@@ -45,7 +46,7 @@ plugins:
     multi-account-orchestrator:
       enabled: true
       tier_tolerance_hours: 16       # Reset window tolerance for clustering (hours)
-      low_five_hour_threshold: 0.05  # 5h quota demotion threshold (5%)
+      low_five_hour_threshold: 0.05  # Legacy key: long-period merge threshold (5%)
       base_priority: 400            # Initial top tier priority
       priority_step: 100            # Step size per tier
       minimum_priority: 100         # Floor priority for active tiers
