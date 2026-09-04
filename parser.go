@@ -326,47 +326,77 @@ func ParseCodexQuota(raw []byte) (*Quota, error) {
 		return &rateWindow{hours: hours, reset: rt, rem: rem}
 	}
 
-	var allWindows []rateWindow
-	addFromMap := func(m map[string]any) {
+	windowsFromMap := func(m map[string]any) []rateWindow {
+		var windows []rateWindow
 		if m == nil {
-			return
+			return windows
 		}
 		for _, k := range []string{"primary_window", "primaryWindow", "secondary_window", "secondaryWindow"} {
 			if sub, ok := m[k].(map[string]any); ok {
 				if rw := parseRateObj(sub); rw != nil {
-					allWindows = append(allWindows, *rw)
+					windows = append(windows, *rw)
 				}
 			}
 		}
+		return windows
 	}
 
+	var mainWindows []rateWindow
 	if rl, ok := payload["rate_limit"].(map[string]any); ok {
-		addFromMap(rl)
+		mainWindows = windowsFromMap(rl)
 	} else if rl, ok := payload["rateLimit"].(map[string]any); ok {
-		addFromMap(rl)
+		mainWindows = windowsFromMap(rl)
 	}
+	allWindows := append([]rateWindow(nil), mainWindows...)
 
 	if rev, ok := payload["code_review_rate_limit"].(map[string]any); ok {
-		addFromMap(rev)
+		allWindows = append(allWindows, windowsFromMap(rev)...)
+	} else if rev, ok := payload["codeReviewRateLimit"].(map[string]any); ok {
+		allWindows = append(allWindows, windowsFromMap(rev)...)
 	}
-
-	var fiveCandidates []rateWindow
-	var longWindows []rateWindow
-	for _, w := range allWindows {
-		if w.hours <= 6.0 {
-			fiveCandidates = append(fiveCandidates, w)
-		} else {
-			longWindows = append(longWindows, w)
+	additional, _ := payload["additional_rate_limits"].([]any)
+	if additional == nil {
+		additional, _ = payload["additionalRateLimits"].([]any)
+	}
+	for _, item := range additional {
+		entry, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if rateLimit, ok := entry["rate_limit"].(map[string]any); ok {
+			allWindows = append(allWindows, windowsFromMap(rateLimit)...)
+		} else if rateLimit, ok := entry["rateLimit"].(map[string]any); ok {
+			allWindows = append(allWindows, windowsFromMap(rateLimit)...)
 		}
 	}
 
-	if len(longWindows) == 0 {
+	var fiveCandidates []rateWindow
+	var mainLongWindows []rateWindow
+	for _, w := range mainWindows {
+		if w.hours <= 6.0 {
+			fiveCandidates = append(fiveCandidates, w)
+		} else {
+			mainLongWindows = append(mainLongWindows, w)
+		}
+	}
+	var allLongWindows []rateWindow
+	for _, w := range allWindows {
+		if w.hours > 6.0 {
+			allLongWindows = append(allLongWindows, w)
+		}
+	}
+	routingLongWindows := mainLongWindows
+	if len(routingLongWindows) == 0 {
+		routingLongWindows = allLongWindows
+	}
+
+	if len(routingLongWindows) == 0 {
 		return nil, errors.New("Codex long quota window is missing")
 	}
 
 	// Primary long window: earliest reset
-	primary := longWindows[0]
-	for _, w := range longWindows[1:] {
+	primary := routingLongWindows[0]
+	for _, w := range routingLongWindows[1:] {
 		if w.reset.Before(primary.reset) {
 			primary = w
 		}
@@ -383,8 +413,10 @@ func ParseCodexQuota(raw []byte) (*Quota, error) {
 		fivePtr = &minFive
 	}
 
-	longs := make([]float64, len(longWindows))
-	for i, w := range longWindows {
+	// Auxiliary model limits must not keep a credential routable for ordinary
+	// Codex models once its main weekly limit is exhausted.
+	longs := make([]float64, len(routingLongWindows))
+	for i, w := range routingLongWindows {
 		longs[i] = w.rem
 	}
 

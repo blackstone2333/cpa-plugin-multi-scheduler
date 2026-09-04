@@ -15,6 +15,7 @@ It provides real-time quota awareness, reset-window tier clustering, adaptive ra
 - **Low-Quota Drain**: When every account in an earlier reset tier is at or below 5% on its long-period quota, that tier merges with the next healthy tier. Positive-quota accounts remain equally routable until all long windows are exhausted.
 - **Short-Window Tolerance**: A temporary 5-hour dip does not change priority; CPA's own availability and cooldown handling cover that window.
 - **Exhaustion Soft Sink**: When all long-period quota windows are exhausted, assigns priority `-1000` to prevent traffic routing without hard-disabling the account.
+- **Codex Main-Quota Routing**: Codex scheduling follows the main account quota; model-specific auxiliary limits such as Spark and Code Review cannot keep ordinary Codex routing active after the main weekly quota reaches zero.
 - **Adaptive Polling & Backoff**: Polls accounts above 15% every 30 minutes, 5%–15% every 15 minutes, and below 5% every 10 minutes; handles HTTP 429 with exponential backoff.
 - **Built-in Visual Dashboard**: Dedicated Management UI and JSON status endpoint to monitor all credentials, tiers, remaining percentages, and reset countdowns in real time.
 

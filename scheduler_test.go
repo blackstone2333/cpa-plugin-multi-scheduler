@@ -280,3 +280,42 @@ func TestParsers(t *testing.T) {
 		t.Errorf("expected codex weekly remaining 0.75, got %f", cxQuota.WeeklyFraction)
 	}
 }
+
+func TestParseCodexQuotaDoesNotLetAuxiliaryModelQuotaMaskMainExhaustion(t *testing.T) {
+	raw := []byte(`{
+		"rate_limit": {
+			"primary_window": {
+				"limit_window_seconds": 18000,
+				"used_percent": 100.0,
+				"reset_at": "2026-09-04T05:00:00Z"
+			},
+			"secondary_window": {
+				"limit_window_seconds": 604800,
+				"used_percent": 100.0,
+				"reset_at": "2026-09-10T00:00:00Z"
+			}
+		},
+		"additional_rate_limits": [{
+			"limit_name": "GPT-5.3-Codex-Spark",
+			"rate_limit": {
+				"primary_window": {
+					"limit_window_seconds": 18000,
+					"used_percent": 0.0,
+					"reset_at": "2026-09-04T05:00:00Z"
+				},
+				"secondary_window": {
+					"limit_window_seconds": 604800,
+					"used_percent": 99.0,
+					"reset_at": "2026-09-11T00:00:00Z"
+				}
+			}
+		}]
+	}`)
+	quota, err := ParseCodexQuota(raw)
+	if err != nil {
+		t.Fatalf("ParseCodexQuota: %v", err)
+	}
+	if quota.WeeklyFraction != 0 || !quota.AllLongWindowsExhausted() {
+		t.Fatalf("main quota should be exhausted, got weekly=%v long=%v", quota.WeeklyFraction, quota.LongFractions())
+	}
+}
