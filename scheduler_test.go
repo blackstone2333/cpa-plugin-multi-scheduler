@@ -99,8 +99,8 @@ func TestMakeDecisions(t *testing.T) {
 	if d, ok := decMap["acc-healthy-later"]; !ok || d.Priority != 200 {
 		t.Errorf("acc-healthy-later priority = %d, want 200", d.Priority)
 	}
-	if d, ok := decMap["acc-exhausted"]; !ok || d.Priority != -1000 {
-		t.Errorf("acc-exhausted priority = %d, want -1000", d.Priority)
+	if d, ok := decMap["acc-exhausted"]; !ok || d.Priority != 0 {
+		t.Errorf("acc-exhausted priority = %d, want 0", d.Priority)
 	}
 }
 
@@ -172,8 +172,38 @@ func TestMakeDecisionsOnlySinksWhenEveryLongWindowIsExhausted(t *testing.T) {
 	if got["partially-exhausted"] != 400 {
 		t.Fatalf("partially-exhausted priority = %d, want 400 while one long window remains", got["partially-exhausted"])
 	}
-	if got["fully-exhausted"] != -1000 {
-		t.Fatalf("fully-exhausted priority = %d, want -1000", got["fully-exhausted"])
+	if got["fully-exhausted"] != 0 {
+		t.Fatalf("fully-exhausted priority = %d, want 0", got["fully-exhausted"])
+	}
+}
+
+func TestMakeDecisionsKeepsOnlyEnabledExhaustedAccountFullyRoutable(t *testing.T) {
+	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
+	decisions := MakeDecisions([]*AccountState{{
+		Key: "only",
+		Quota: &Quota{
+			WeeklyFraction:  0,
+			WeeklyFractions: []float64{0, 0},
+			WeeklyReset:     now,
+		},
+	}}, DefaultConfig())
+	if len(decisions) != 1 || decisions[0].Priority != 400 {
+		t.Fatalf("only enabled account decision = %#v, want priority 400", decisions)
+	}
+}
+
+func TestMakeDecisionsClampsLegacyNegativeExhaustedPriority(t *testing.T) {
+	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
+	cfg := DefaultConfig()
+	cfg.ExhaustedPriority = -1000
+	decisions := MakeDecisions([]*AccountState{
+		{Key: "empty", Quota: &Quota{WeeklyFraction: 0, WeeklyFractions: []float64{0}, WeeklyReset: now}},
+		{Key: "healthy", Quota: &Quota{WeeklyFraction: 1, WeeklyFractions: []float64{1}, WeeklyReset: now}},
+	}, cfg)
+	for _, decision := range decisions {
+		if decision.Priority < 0 {
+			t.Fatalf("legacy config produced negative priority: %#v", decision)
+		}
 	}
 }
 
@@ -189,13 +219,13 @@ func TestSelectBestAccountRoundRobin(t *testing.T) {
 	})
 	store.Put(&AccountState{
 		AuthID:          "auth-exhausted",
-		CurrentPriority: -1000,
+		CurrentPriority: 0,
 	})
 
 	candidates := []pluginapi.SchedulerAuthCandidate{
 		{ID: "auth-1", Priority: 400},
 		{ID: "auth-2", Priority: 400},
-		{ID: "auth-exhausted", Priority: -1000},
+		{ID: "auth-exhausted", Priority: 0},
 	}
 
 	// First call
@@ -211,6 +241,19 @@ func TestSelectBestAccountRoundRobin(t *testing.T) {
 	}
 	if id1 == id2 {
 		t.Errorf("expected round-robin alternation between auth-1 and auth-2, got %s twice", id1)
+	}
+}
+
+func TestSelectBestAccountAllowsOnlyZeroPriorityCandidate(t *testing.T) {
+	store := NewSafeStateStore()
+	store.Put(&AccountState{AuthID: "only", CurrentPriority: 0})
+	id, ok := SelectBestAccount(
+		[]pluginapi.SchedulerAuthCandidate{{ID: "only", Priority: 0}},
+		"codex",
+		store,
+	)
+	if !ok || id != "only" {
+		t.Fatalf("picked (%q, %v), want only zero-priority candidate", id, ok)
 	}
 }
 

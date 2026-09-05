@@ -7,18 +7,18 @@ import (
 )
 
 type Config struct {
-	Enabled               bool          `yaml:"enabled" json:"enabled"`
-	TierToleranceHours    int           `yaml:"tier_tolerance_hours" json:"tier_tolerance_hours"`
-	LowFiveHourThreshold  float64       `yaml:"low_five_hour_threshold" json:"low_five_hour_threshold"`
-	BasePriority          int           `yaml:"base_priority" json:"base_priority"`
-	PriorityStep          int           `yaml:"priority_step" json:"priority_step"`
-	MinimumPriority       int           `yaml:"minimum_priority" json:"minimum_priority"`
-	ExhaustedPriority     int           `yaml:"exhausted_priority" json:"exhausted_priority"`
-	PollIntervalHighMin   int           `yaml:"poll_interval_high_min" json:"poll_interval_high_min"`
-	PollIntervalMediumMin int           `yaml:"poll_interval_medium_min" json:"poll_interval_medium_min"`
-	PollIntervalLowMin    int           `yaml:"poll_interval_low_min" json:"poll_interval_low_min"`
-	StaggerIntervalSec    int           `yaml:"stagger_interval_sec" json:"stagger_interval_sec"`
-	SyncToHostPriority    bool          `yaml:"sync_to_host_priority" json:"sync_to_host_priority"`
+	Enabled               bool    `yaml:"enabled" json:"enabled"`
+	TierToleranceHours    int     `yaml:"tier_tolerance_hours" json:"tier_tolerance_hours"`
+	LowFiveHourThreshold  float64 `yaml:"low_five_hour_threshold" json:"low_five_hour_threshold"`
+	BasePriority          int     `yaml:"base_priority" json:"base_priority"`
+	PriorityStep          int     `yaml:"priority_step" json:"priority_step"`
+	MinimumPriority       int     `yaml:"minimum_priority" json:"minimum_priority"`
+	ExhaustedPriority     int     `yaml:"exhausted_priority" json:"exhausted_priority"`
+	PollIntervalHighMin   int     `yaml:"poll_interval_high_min" json:"poll_interval_high_min"`
+	PollIntervalMediumMin int     `yaml:"poll_interval_medium_min" json:"poll_interval_medium_min"`
+	PollIntervalLowMin    int     `yaml:"poll_interval_low_min" json:"poll_interval_low_min"`
+	StaggerIntervalSec    int     `yaml:"stagger_interval_sec" json:"stagger_interval_sec"`
+	SyncToHostPriority    bool    `yaml:"sync_to_host_priority" json:"sync_to_host_priority"`
 }
 
 func DefaultConfig() Config {
@@ -29,7 +29,7 @@ func DefaultConfig() Config {
 		BasePriority:          400,
 		PriorityStep:          100,
 		MinimumPriority:       100,
-		ExhaustedPriority:     -1000,
+		ExhaustedPriority:     0,
 		PollIntervalHighMin:   30,
 		PollIntervalMediumMin: 15,
 		PollIntervalLowMin:    10,

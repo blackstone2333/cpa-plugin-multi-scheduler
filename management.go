@@ -90,8 +90,8 @@ func (m *ManagementService) renderHTML(view StatusView) string {
 		statusBadge := `<span class="badge badge-success">就绪 (Ready)</span>`
 		if a.Disabled {
 			statusBadge = `<span class="badge badge-muted">已停用 (Disabled)</span>`
-		} else if a.CurrentPriority <= -1000 {
-			statusBadge = `<span class="badge badge-danger">额度耗尽 (Exhausted)</span>`
+		} else if a.Quota != nil && a.Quota.AllLongWindowsExhausted() {
+			statusBadge = `<span class="badge badge-danger">额度耗尽/备用 (Exhausted/Standby)</span>`
 		} else if a.CurrentPriority < 400 {
 			statusBadge = `<span class="badge badge-warning">降级/次级 (Demoted)</span>`
 		}

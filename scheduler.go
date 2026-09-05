@@ -75,6 +75,22 @@ func MakeDecisions(accounts []*AccountState, cfg Config) []Decision {
 		}
 	}
 
+	enabledCount := len(active) + len(exhausted)
+	if enabledCount == 1 {
+		var only *AccountState
+		if len(active) == 1 {
+			only = active[0]
+		} else {
+			only = exhausted[0]
+		}
+		return []Decision{{
+			Account:  only,
+			Priority: cfg.BasePriority,
+			Tier:     0,
+			Reason:   "only enabled credential for provider",
+		}}
+	}
+
 	tiers := GroupTiers(active, cfg.TierTolerance())
 	scores := make([]int, len(tiers))
 	for i := range tiers {
@@ -119,13 +135,18 @@ func MakeDecisions(accounts []*AccountState, cfg Config) []Decision {
 
 	decisions := make([]Decision, 0, len(accounts))
 
-	// Exhausted accounts assigned negative priority (-1000)
+	// Keep exhausted accounts as last-resort routes. Clamp legacy negative
+	// configuration so an upgrade cannot continue writing an unusable priority.
+	exhaustedPriority := cfg.ExhaustedPriority
+	if exhaustedPriority < 0 {
+		exhaustedPriority = 0
+	}
 	for _, acc := range exhausted {
 		decisions = append(decisions, Decision{
 			Account:  acc,
-			Priority: cfg.ExhaustedPriority,
+			Priority: exhaustedPriority,
 			Tier:     -1,
-			Reason:   "all long quota windows exhausted",
+			Reason:   "all long quota windows exhausted; retained as last-resort route",
 		})
 	}
 
@@ -216,19 +237,7 @@ func SelectBestAccount(candidates []pluginapi.SchedulerAuthCandidate, provider s
 		})
 	}
 
-	// Filter out hard exhausted accounts (prio <= -1000) if any non-exhausted candidate exists
-	var nonExhausted []candidateInfo
-	for _, inf := range infos {
-		if inf.priority > -1000 {
-			nonExhausted = append(nonExhausted, inf)
-		}
-	}
-
-	targetPool := nonExhausted
-	if len(targetPool) == 0 {
-		// All candidates are exhausted or unassigned, consider all candidates
-		targetPool = infos
-	}
+	targetPool := infos
 
 	// Find the highest priority present in targetPool
 	maxPrio := targetPool[0].priority
